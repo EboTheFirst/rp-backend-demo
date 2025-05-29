@@ -51,16 +51,17 @@ def merchant_average_transactions(
     # Set groupings and label formatting
     if granularity == "daily":
         group_cols = ["year", "month", "day"]
-        label_fmt = lambda r: f"{r['year']:04d}-{r['month']:02d}-{r['day']:02d}"
+        label_fmt = lambda r: f"{int(r['year']):04d}-{int(r['month']):02d}-{int(r['day']):02d}"
     elif granularity == "weekly":
         group_cols = ["year", "week"]
-        label_fmt = lambda r: f"{r['year']:04d}-W{r['week']:02d}"
+        label_fmt = lambda r: f"{int(r['year']):04d}-W{int(r['week']):02d}"
     elif granularity == "monthly":
         group_cols = ["year", "month"]
-        label_fmt = lambda r: f"{r['year']:04d}-{r['month']:02d}"
+        label_fmt = lambda r: f"{int(r['year']):04d}-{int(r['month']):02d}"
     else:  # yearly
         group_cols = ["year"]
-        label_fmt = lambda r: f"{r['year']:04d}"
+        label_fmt = lambda r: f"{int(r['year']):04d}"
+
 
     # Aggregate and label
     grouped = df.groupby(group_cols)["amount"].mean().reset_index()
