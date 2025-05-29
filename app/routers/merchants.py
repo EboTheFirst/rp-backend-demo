@@ -5,8 +5,8 @@ from ..core.data import get_df
 from ..models.stats import SimpleStat, GraphData, GraphPoints, TableData
 import pandas as pd
 from app.utils.helpers import (
-    apply_merchant_date_filters, get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
-    get_top_customers, get_transaction_count_over_time, get_average_transaction_over_time, get_days_between_transactions
+        apply_merchant_date_filters, get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
+        get_top_customers, get_transaction_count_over_time, get_average_transaction_over_time, get_days_between_transactions
     )
 
 
@@ -16,6 +16,54 @@ router = APIRouter(prefix="/merchants", tags=["Merchants"])
 def total_merchants(df = Depends(get_df)):
     count = df["merchant_id"].nunique()
     return SimpleStat(metric="Unique Merchant Count", value=count)
+
+
+@router.get("/{merchant_id}/overview")
+def merchant_overview(
+    merchant_id: str,
+    granularity: str = Query("monthly", pattern="^(daily|weekly|monthly|yearly)$"),
+    top_mode: str = Query("amount", pattern="^(amount|count)$"),
+    top_limit: int = Query(10, ge=1),
+    year: int = None,
+    month: int = None,
+    week: int = None,
+    day: int = Query(None, ge=1, le=31),
+    range_days: int = Query(None, ge=1),
+    start_date: str = None,
+    end_date: str = None,
+    df=Depends(get_df)
+):
+    df["date"] = pd.to_datetime(df["date"])
+    df = df[df["merchant_id"] == merchant_id]
+
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No data found for this merchant")
+
+    df = apply_merchant_date_filters(df, year, month, week, day, range_days, start_date, end_date)
+
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No data after filtering")
+
+    filters = {
+        "year": year,
+        "month": month,
+        "week": week,
+        "day": day,
+        "range_days": range_days,
+        "start_date": start_date,
+        "end_date": end_date
+    }
+
+    return {
+        "transaction_volume": get_transaction_volume_over_time(df, granularity),
+        "transaction_count": get_transaction_count_over_time(df, granularity, filters),
+        "average_transactions": get_average_transaction_over_time(df, granularity, filters),
+        "segmentation": get_customer_segmentation(df, filters),
+        "top_customers": get_top_customers(df, top_mode, top_limit, filters),
+        "transaction_outliers": get_transaction_outliers(df, filters),
+        "days_between_transactions": get_days_between_transactions(df, filters)
+    }
+
 
 @router.get("/{merchant_id}/average-transactions", response_model=GraphData)
 def merchant_average_transactions(
@@ -252,7 +300,6 @@ def merchant_days_between_transactions(
     }
 
     return get_days_between_transactions(df, filters)
-
 
 
 @router.get("/export")
