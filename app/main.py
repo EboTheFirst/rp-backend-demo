@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .core.config import settings
 from .core.data import load_data
-from .routers import customers, merchants, upload
+from .routers import agents, customers, merchants, terminals, branch_admins, upload
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,3 +26,6 @@ app.add_middleware(
 app.include_router(upload.router)    
 app.include_router(customers.router)
 app.include_router(merchants.router)
+app.include_router(terminals.router)
+app.include_router(agents.router)
+app.include_router(branch_admins.router)
