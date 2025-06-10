@@ -4,8 +4,9 @@ from fastapi.responses import StreamingResponse
 from ..core.data import get_df
 from ..models.stats import SimpleStat, GraphData, TableData
 import pandas as pd
+from app.utils.router_helpers import filter_entity_data
 from app.logic.branch_admins import (
-        apply_branch_admin_date_filters, get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
+        get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
         get_top_customers, get_transaction_count_over_time, get_average_transaction_over_time, get_days_between_transactions
     )
 
@@ -49,26 +50,11 @@ def branch_admin_overview(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this branch admin")
-
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return {
         "transaction_volume": get_transaction_volume_over_time(df, granularity),
@@ -94,26 +80,11 @@ def branch_admin_average_transactions(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this branch_admin")
-
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data matches the given filters")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_average_transaction_over_time(df, granularity, filters)
 
@@ -130,26 +101,11 @@ def branch_admin_customer_segmentation(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this branch admin")
-
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No transactions match the filters")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date,
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_customer_segmentation(df, filters)
 
@@ -168,26 +124,11 @@ def top_customers_per_branch_admin(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this branch admin")
-
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_top_customers(df, mode, limit, filters)
 
@@ -205,12 +146,11 @@ def branch_admin_transaction_volume(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No transactions match the filters")
+    # Use the helper function to filter data
+    df, _ = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_transaction_volume_over_time(df, granularity)
 
@@ -228,22 +168,13 @@ def branch_admin_transaction_count(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No transactions match the filters")
-
-    return get_transaction_count_over_time(df, granularity, {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date,
-    })
+    return get_transaction_count_over_time(df, granularity, filters)
 
 
 @router.get("/{branch_admin_id}/transaction-outliers", response_model=TableData)
@@ -258,26 +189,11 @@ def branch_admin_transaction_outliers(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this branch admin")
-
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_transaction_outliers(df, filters)
 
@@ -294,27 +210,43 @@ def branch_admin_days_between_transactions(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["branch_admin_id"] == branch_admin_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this branch admin")
-
-    df = apply_branch_admin_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_days_between_transactions(df, filters)
+
+
+@router.get("/{branch_admin_id}/export")
+def export_branch_admin_data(
+    branch_admin_id: str,
+    year: int = None,
+    month: int = None,
+    week: int = None,
+    day: int = Query(None, ge=1, le=31),
+    range_days: int = Query(None, ge=1),
+    start_date: str = None,
+    end_date: str = None,
+    df=Depends(get_df)
+):
+    # Use the helper function to filter data
+    df, _ = filter_entity_data(
+        df, "branch_admin_id", branch_admin_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
+    
+    # Convert to CSV
+    output = StringIO()
+    df.to_csv(output, index=False)
+    output.seek(0)
+    
+    # Return as downloadable file
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=branch_admin_{branch_admin_id}_data.csv"}
+    )
 
 

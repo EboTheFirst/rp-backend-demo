@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
 from ..core.data import get_df
-from ..models.stats import SimpleStat
+from ..models.stats import SimpleStat, GraphData, TableData
+import pandas as pd
+from app.utils.router_helpers import filter_entity_data
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 

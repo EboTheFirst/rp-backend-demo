@@ -5,6 +5,7 @@ import pandas as pd
 from fastapi import HTTPException
 
 from .config import settings
+from app.utils.caching import timed_cache
 
 # ─── In-memory DataFrame cache ─────────────────────────────────────────────
 _df: Optional[pd.DataFrame] = None
@@ -25,6 +26,7 @@ def _load_from_path(path) -> pd.DataFrame:
         raise HTTPException(422, f"Could not read CSV: {exc}") from exc
     return _df
 
+@timed_cache(seconds=60)  # Cache for 1 minute
 def get_df() -> pd.DataFrame:
     """Return cached DataFrame or lazy-load."""
     return _df if _df is not None else load_data()

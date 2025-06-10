@@ -4,8 +4,9 @@ from fastapi.responses import StreamingResponse
 from ..core.data import get_df
 from ..models.stats import SimpleStat, GraphData, TableData
 import pandas as pd
+from app.utils.router_helpers import filter_entity_data
 from app.logic.agents import (
-        apply_agent_date_filters, get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
+        get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
         get_top_customers, get_transaction_count_over_time, get_average_transaction_over_time, get_days_between_transactions,
         get_merchant_segmentation, get_top_merchants, get_transaction_outliers_merchants
     )
@@ -50,26 +51,11 @@ def agent_overview(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return {
         "transaction_volume": get_transaction_volume_over_time(df, granularity),
@@ -95,26 +81,11 @@ def agent_average_transactions(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data matches the given filters")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_average_transaction_over_time(df, granularity, filters)
 
@@ -131,26 +102,11 @@ def agent_customer_segmentation(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No transactions match the filters")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date,
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_customer_segmentation(df, filters)
 
@@ -167,26 +123,11 @@ def agent_merchant_segmentation(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No transactions match the filters")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date,
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_merchant_segmentation(df, filters)
 
@@ -205,26 +146,11 @@ def top_merchants_per_agent(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_top_merchants(df, mode, limit, filters)
 
@@ -243,26 +169,11 @@ def top_customers_per_agent(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_top_customers(df, mode, limit, filters)
 
@@ -280,12 +191,11 @@ def agent_transaction_volume(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No transactions match the filters")
+    # Use the helper function to filter data
+    df, _ = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_transaction_volume_over_time(df, granularity)
 
@@ -303,22 +213,13 @@ def agent_transaction_count(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No transactions match the filters")
-
-    return get_transaction_count_over_time(df, granularity, {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date,
-    })
+    return get_transaction_count_over_time(df, granularity, filters)
 
 
 @router.get("/{agent_id}/transaction-outliers", response_model=TableData)
@@ -333,26 +234,11 @@ def agent_transaction_outliers(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_transaction_outliers(df, filters)
 
@@ -369,27 +255,43 @@ def agent_days_between_transactions(
     end_date: str = None,
     df=Depends(get_df)
 ):
-    df["date"] = pd.to_datetime(df["date"])
-    df = df[df["agent_id"] == agent_id]
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data found for this agent")
-
-    df = apply_agent_date_filters(df, year, month, week, day, range_days, start_date, end_date)
-
-    if df.empty:
-        raise HTTPException(status_code=404, detail="No data after filtering")
-
-    filters = {
-        "year": year,
-        "month": month,
-        "week": week,
-        "day": day,
-        "range_days": range_days,
-        "start_date": start_date,
-        "end_date": end_date
-    }
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
 
     return get_days_between_transactions(df, filters)
+
+
+@router.get("/{agent_id}/export")
+def export_agent_data(
+    agent_id: str,
+    year: int = None,
+    month: int = None,
+    week: int = None,
+    day: int = Query(None, ge=1, le=31),
+    range_days: int = Query(None, ge=1),
+    start_date: str = None,
+    end_date: str = None,
+    df=Depends(get_df)
+):
+    # Use the helper function to filter data
+    df, _ = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
+    
+    # Convert to CSV
+    output = StringIO()
+    df.to_csv(output, index=False)
+    output.seek(0)
+    
+    # Return as downloadable file
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=agent_{agent_id}_data.csv"}
+    )
 
 
