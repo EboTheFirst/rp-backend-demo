@@ -176,23 +176,41 @@ def _get_segmentation(df: pd.DataFrame, filters: dict,
     )
 
 def _get_top_entities(df: pd.DataFrame, mode: str, limit: int, filters: dict,
-                    entity_id_col: str, target_id_col: str, 
+                    entity_id_col: str, target_id_col: str,
                     metric_prefix: str = "Top") -> TableData:
-    """Get top entities by amount or count."""
+    """Get top entities by amount or count, but always include both metrics."""
+
+    # Calculate both amount and count for each entity
+    grouped_stats = (
+        df.groupby([entity_id_col, target_id_col])
+        .agg({
+            'amount': ['sum', 'count']
+        })
+        .reset_index()
+    )
+
+    # Flatten column names
+    grouped_stats.columns = [entity_id_col, target_id_col, 'total_amount', 'transaction_count']
+
+    # Add entity name if available
+    name_col = target_id_col.replace('_id', '_name')
+    if name_col in df.columns:
+        # Get the name for each entity (take first occurrence)
+        entity_names = df.groupby(target_id_col)[name_col].first().reset_index()
+        grouped_stats = grouped_stats.merge(entity_names, on=target_id_col, how='left')
+
+    # Sort by the specified mode and take top N
     if mode == "amount":
-        grouped = (
-            df.groupby([entity_id_col, target_id_col])["amount"].sum()
-            .reset_index()
-            .sort_values(by=[entity_id_col, "amount"], ascending=[True, False])
+        sorted_data = (
+            grouped_stats
+            .sort_values(by=[entity_id_col, "total_amount"], ascending=[True, False])
             .groupby(entity_id_col)
             .head(limit)
         )
         base_metric = f"{metric_prefix} {limit} {target_id_col.replace('_id', '').title()}s by Amount"
     else:  # mode == "count"
-        grouped = (
-            df.groupby([entity_id_col, target_id_col])["amount"].count()
-            .reset_index()
-            .rename(columns={"amount": "transaction_count"})
+        sorted_data = (
+            grouped_stats
             .sort_values(by=[entity_id_col, "transaction_count"], ascending=[True, False])
             .groupby(entity_id_col)
             .head(limit)
@@ -203,7 +221,7 @@ def _get_top_entities(df: pd.DataFrame, mode: str, limit: int, filters: dict,
 
     return TableData(
         metric=base_metric + suffix,
-        data=grouped.to_dict(orient="records")
+        data=sorted_data.to_dict(orient="records")
     )
 
 def _get_transaction_volume_over_time(df: pd.DataFrame, granularity: str, 

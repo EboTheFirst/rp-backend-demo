@@ -23,9 +23,9 @@ app.add_middleware(
 )
 
 
-app.include_router(upload.router)    
-app.include_router(customers.router)
-app.include_router(merchants.router)
-app.include_router(terminals.router)
+app.include_router(upload.router)
 app.include_router(agents.router)
+app.include_router(customers.router)
+app.include_router(terminals.router)
 app.include_router(branch_admins.router)
+app.include_router(merchants.router)

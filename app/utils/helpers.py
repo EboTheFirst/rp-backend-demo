@@ -1,7 +1,6 @@
 
 import pandas as pd
 from ..models.stats import SimpleStat, GraphData, GraphPoints, TableData
-import pandas as pd
 
 def get_average_transaction_over_time(df: pd.DataFrame, granularity: str, filters: dict) -> GraphData:
     group_cols, label_fmt = get_grouping_and_label_fn(granularity)
@@ -214,3 +213,167 @@ def get_filter_suffix(filters: dict) -> str:
         parts.append(f"{filters['start_date']} to {filters['end_date']}")
 
     return " for " + ", ".join(parts) if parts else ""
+
+def add_computed_attributes(df, id_col):
+    # Core numeric aggregates for amount
+    agg_df = df.groupby(id_col)['amount'].agg([
+        ('avg_transaction_amount', 'mean'),
+        ('total_transactions', 'count'),
+        ('sum_transaction_amount', 'sum'),
+        ('min_transaction_amount', 'min'),
+        ('max_transaction_amount', 'max'),
+        ('std_transaction_amount', 'std')
+    ]).reset_index()
+
+    # Always compute unique customers
+    if id_col != 'customer_id':
+        unique_customers = df.groupby(id_col)['customer_id'].nunique().reset_index()
+        unique_customers.rename(columns={'customer_id': 'unique_customers'}, inplace=True)
+        agg_df = agg_df.merge(unique_customers, on=id_col, how='left')
+
+    # Dynamically compute other unique counts
+    if id_col == 'merchant_id':
+        # Unique branch admins
+        unique_branch_admins = df.groupby(id_col)['branch_admin_id'].nunique().reset_index()
+        unique_branch_admins.rename(columns={'branch_admin_id': 'unique_branch_admins'}, inplace=True)
+        agg_df = agg_df.merge(unique_branch_admins, on=id_col, how='left')
+
+        # Unique terminals
+        unique_terminals = df.groupby(id_col)['terminal_id'].nunique().reset_index()
+        unique_terminals.rename(columns={'terminal_id': 'unique_terminals'}, inplace=True)
+        agg_df = agg_df.merge(unique_terminals, on=id_col, how='left')
+
+    elif id_col == 'branch_admin_id':
+        # Unique terminals
+        unique_terminals = df.groupby(id_col)['terminal_id'].nunique().reset_index()
+        unique_terminals.rename(columns={'terminal_id': 'unique_terminals'}, inplace=True)
+        agg_df = agg_df.merge(unique_terminals, on=id_col, how='left')
+
+    # Merge computed attributes back to the main DataFrame
+    df = df.merge(agg_df, on=id_col, how='left')
+
+    return df
+
+# def add_computed_attributes(df, id_col):
+#     # Core numeric aggregates for amount
+#     agg_df = df.groupby(id_col)['amount'].agg([
+#         ('avg_transaction_amount', 'mean'),
+#         ('total_transactions', 'count'),
+#         ('sum_transaction_amount', 'sum'),
+#         ('min_transaction_amount', 'min'),
+#         ('max_transaction_amount', 'max'),
+#         ('std_transaction_amount', 'std')
+#     ]).reset_index()
+
+#     # Always compute unique customers
+#     if id_col != 'customer_id':
+#         unique_customers = df.groupby(id_col)['customer_id'].nunique().reset_index()
+#         unique_customers.rename(columns={'customer_id': 'unique_customers'}, inplace=True)
+#         agg_df = agg_df.merge(unique_customers, on=id_col, how='left')
+
+#     # Dynamically compute other unique counts
+#     if id_col == 'agent_id':
+#         # Unique merchants
+#         unique_merchants = df.groupby(id_col)['merchant_id'].nunique().reset_index()
+#         unique_merchants.rename(columns={'merchant_id': 'unique_merchants'}, inplace=True)
+#         agg_df = agg_df.merge(unique_merchants, on=id_col, how='left')
+
+#         # Unique branch admins
+#         unique_branch_admins = df.groupby(id_col)['branch_admin_id'].nunique().reset_index()
+#         unique_branch_admins.rename(columns={'branch_admin_id': 'unique_branch_admins'}, inplace=True)
+#         agg_df = agg_df.merge(unique_branch_admins, on=id_col, how='left')
+
+#         # Unique terminals
+#         unique_terminals = df.groupby(id_col)['terminal_id'].nunique().reset_index()
+#         unique_terminals.rename(columns={'terminal_id': 'unique_terminals'}, inplace=True)
+#         agg_df = agg_df.merge(unique_terminals, on=id_col, how='left')
+
+#     elif id_col == 'merchant_id':
+#         # Unique branch admins
+#         unique_branch_admins = df.groupby(id_col)['branch_admin_id'].nunique().reset_index()
+#         unique_branch_admins.rename(columns={'branch_admin_id': 'unique_branch_admins'}, inplace=True)
+#         agg_df = agg_df.merge(unique_branch_admins, on=id_col, how='left')
+
+#         # Unique terminals
+#         unique_terminals = df.groupby(id_col)['terminal_id'].nunique().reset_index()
+#         unique_terminals.rename(columns={'terminal_id': 'unique_terminals'}, inplace=True)
+#         agg_df = agg_df.merge(unique_terminals, on=id_col, how='left')
+
+#     elif id_col == 'branch_admin_id':
+#         # Unique terminals
+#         unique_terminals = df.groupby(id_col)['terminal_id'].nunique().reset_index()
+#         unique_terminals.rename(columns={'terminal_id': 'unique_terminals'}, inplace=True)
+#         agg_df = agg_df.merge(unique_terminals, on=id_col, how='left')
+
+#     # Merge computed attributes back to the main DataFrame
+#     df = df.merge(agg_df, on=id_col, how='left')
+
+#     return df
+
+
+import pandas as pd
+
+def apply_filter(df, filter_obj):
+    if 'and' in filter_obj:
+        masks = [apply_filter(df, f) for f in filter_obj['and']]
+        return pd.concat(masks, axis=1).all(axis=1)
+
+    elif 'or' in filter_obj:
+        masks = [apply_filter(df, f) for f in filter_obj['or']]
+        return pd.concat(masks, axis=1).any(axis=1)
+
+    elif 'not' in filter_obj:
+        mask = apply_filter(df, filter_obj['not'])
+        return ~mask
+
+    else:
+        col = filter_obj['column']
+        op = filter_obj['operator']
+        val = filter_obj['value']
+
+        if col not in df.columns:
+            raise ValueError(f"Unsupported column: '{col}'")
+
+        s = df[col]
+        if op == 'equals':
+            return s == val
+        elif op == 'not_equals':
+            return s != val
+        elif op == 'greater_than':
+            return s > val
+        elif op == 'greater_than_equals':
+            return s >= val
+        elif op == 'less_than':
+            return s < val
+        elif op == 'less_than_equals':
+            return s <= val
+        elif op == 'between':
+            return s.between(val[0], val[1])
+        elif op == 'in':
+            return s.isin(val)
+        elif op == 'not_in':
+            return ~s.isin(val)
+        else:
+            raise ValueError(f"Unsupported operator: '{op}' for column '{col}'")
+
+
+def filter_transactions(df, filter_structure, id_col='merchant_id'):
+    mask = apply_filter(df, filter_structure)
+    return df[mask]
+
+def build_schema_prompt(df: pd.DataFrame) -> str:
+    """
+    Builds a schema string describing each column and its type for inclusion in the LLM system prompt.
+    
+    Args:
+        df: The DataFrame containing original data columns.
+        computed_columns: A dict of computed column names and their descriptions.
+    
+    Returns:
+        A string to insert in the system prompt describing the schema.
+    """
+    schema_lines = ["Columns:"]
+    for col, dtype in df.dtypes.items():
+        schema_lines.append(f"- {col} ({dtype})")
+
+    return "\n".join(schema_lines)

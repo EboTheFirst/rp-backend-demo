@@ -1,5 +1,5 @@
 from io import StringIO
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
 from ..core.data import get_df
 from ..models.stats import SimpleStat, GraphData, TableData
@@ -10,6 +10,8 @@ from app.logic.terminals import (
     get_top_customers, get_transaction_count_over_time, get_average_transaction_over_time, 
     get_days_between_transactions
 )
+from typing import List, Dict, Any
+from app.utils.helpers import filter_transactions
 
 router = APIRouter(prefix="/terminals", tags=["Terminals"])
 
@@ -232,3 +234,39 @@ def export_terminal_data(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=terminal_{terminal_id}_data.csv"}
     )
+
+
+@router.post("/filter", response_model=List[Dict[str, Any]])
+def filter_terminals(
+    filter_structure: Dict[str, Any] = Body(...),
+    df=Depends(get_df)
+):
+    """
+    Filter terminals based on complex filter criteria.
+    
+    The filter_structure should follow the format:
+    {
+        "and": [
+            {"column": "total_transactions", "operator": "greater_than", "value": 20},
+            {"column": "avg_transaction_amount", "operator": "less_than", "value": 300}
+        ]
+    }
+    
+    Supported operators: equals, greater_than, less_than, between, in
+    """
+    try:
+        # Add computed attributes with terminal_id as the grouping column
+        filtered_df = filter_transactions(df, filter_structure, id_col='terminal_id')
+        
+        if filtered_df.empty:
+            return []
+        
+        # Get unique terminals with their attributes
+        terminal_cols = ['terminal_id', 'avg_transaction_amount', 'total_transactions', 'unique_customers']
+        available_cols = [col for col in terminal_cols if col in filtered_df.columns]
+        
+        terminals = filtered_df[available_cols].drop_duplicates('terminal_id').to_dict(orient='records')
+        return terminals
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

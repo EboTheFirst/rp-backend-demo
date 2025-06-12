@@ -1,5 +1,5 @@
 from io import StringIO
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
 from ..core.data import get_df
 from ..models.stats import SimpleStat, GraphData, TableData
@@ -9,6 +9,8 @@ from app.logic.branch_admins import (
         get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
         get_top_customers, get_transaction_count_over_time, get_average_transaction_over_time, get_days_between_transactions
     )
+from typing import List, Dict, Any
+from app.utils.helpers import filter_transactions
 
 router = APIRouter(prefix="/branch-admins", tags=["Branch Admins"])
 
@@ -248,5 +250,41 @@ def export_branch_admin_data(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=branch_admin_{branch_admin_id}_data.csv"}
     )
+
+
+@router.post("/filter", response_model=List[Dict[str, Any]])
+def filter_branch_admins(
+    filter_structure: Dict[str, Any] = Body(...),
+    df=Depends(get_df)
+):
+    """
+    Filter branch admins based on complex filter criteria.
+    
+    The filter_structure should follow the format:
+    {
+        "and": [
+            {"column": "total_transactions", "operator": "greater_than", "value": 30},
+            {"column": "unique_terminals", "operator": "greater_than", "value": 5}
+        ]
+    }
+    
+    Supported operators: equals, greater_than, less_than, between, in
+    """
+    try:
+        # Add computed attributes with branch_admin_id as the grouping column
+        filtered_df = filter_transactions(df, filter_structure, id_col='branch_admin_id')
+        
+        if filtered_df.empty:
+            return []
+        
+        # Get unique branch admins with their attributes
+        branch_admin_cols = ['branch_admin_id', 'avg_transaction_amount', 'total_transactions', 'unique_terminals']
+        available_cols = [col for col in branch_admin_cols if col in filtered_df.columns]
+        
+        branch_admins = filtered_df[available_cols].drop_duplicates('branch_admin_id').to_dict(orient='records')
+        return branch_admins
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
