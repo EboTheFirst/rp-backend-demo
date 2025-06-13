@@ -41,7 +41,6 @@ def get_all_merchants_paginated(
     """Get paginated list of all merchants with sorting and search."""
     try:
         # Apply date filters if provided
-        from app.utils.helpers import filter_transactions
         filters = {}
         if any([year, month, week, day, range_days, start_date, end_date]):
             df, filters = filter_entity_data(
@@ -50,7 +49,7 @@ def get_all_merchants_paginated(
             )
 
         # Add computed attributes
-        df = add_computed_attributes(df)
+        df = add_computed_attributes(df, 'merchant_id')
 
         # Group by merchant and calculate stats
         merchant_stats = df.groupby('merchant_id').agg({
@@ -391,18 +390,4 @@ def nl_filter_merchants(
     merchant_cols = ['merchant_id', 'avg_transaction_amount', 'total_transactions', 'unique_customers']
     return apply_nl_filter(df, query, 'merchant_id', merchant_cols)
 
-@router.post("/nl-query", response_model=List[Dict[str, Any]])
-def nl_query_merchants(
-    query: str = Body(..., embed=True),
-    df=Depends(get_df)
-):
-    """
-    Query merchants based on natural language.
-    
-    Example queries:
-    - "Show me merchants with more than 10 transactions"
-    - "Which merchants have the highest average transaction amount?"
-    - "Show me the top 5 merchants by total transaction volume"
-    """
-    merchant_cols = ['merchant_id', 'avg_transaction_amount', 'total_transactions', 'unique_customers', 'sum_transaction_amount']
-    return apply_nl_query(df, query, 'merchant_id', merchant_cols)
+

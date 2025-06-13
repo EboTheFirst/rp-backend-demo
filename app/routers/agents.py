@@ -11,7 +11,8 @@ from app.utils.router_helpers import filter_entity_data
 from app.logic.agents import (
         get_transaction_volume_over_time, get_customer_segmentation, get_transaction_outliers,
         get_top_customers, get_transaction_count_over_time, get_average_transaction_over_time, get_days_between_transactions,
-        get_merchant_segmentation, get_top_merchants, get_transaction_outliers_merchants, get_merchant_activity_heatmap
+        get_merchant_segmentation, get_top_merchants, get_transaction_outliers_merchants, get_merchant_activity_heatmap,
+        get_transaction_frequency_analysis
     )
 from app.utils.filter_helpers import apply_structured_filter, apply_nl_filter
 from typing import List, Dict, Any
@@ -110,7 +111,8 @@ def agent_overview(
         "segmentation": get_customer_segmentation(df, filters),
         "top_customers": get_top_customers(df, top_mode, top_limit, filters),
         "transaction_outliers": get_transaction_outliers(df, filters),
-        "days_between_transactions": get_days_between_transactions(df, filters)
+        "days_between_transactions": get_days_between_transactions(df, filters),
+        "transaction_frequency": get_transaction_frequency_analysis(df, filters)
     }
 
 
@@ -473,6 +475,31 @@ def agent_days_between_transactions(
     return get_days_between_transactions(df, filters)
 
 
+@router.get("/{agent_id}/transaction-frequency-analysis", response_model=TableData)
+def agent_transaction_frequency_analysis(
+    agent_id: str,
+    year: int = None,
+    month: int = None,
+    week: int = None,
+    day: int = Query(None, ge=1, le=31),
+    range_days: int = Query(None, ge=1),
+    start_date: str = None,
+    end_date: str = None,
+    df=Depends(get_df)
+):
+    """
+    Analyze transaction frequency patterns for a specific agent.
+    Returns day of week patterns, hour of day patterns, and overall activity metrics.
+    """
+    # Use the helper function to filter data
+    df, filters = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
+
+    return get_transaction_frequency_analysis(df, filters)
+
+
 @router.get("/{agent_id}/export")
 def export_agent_data(
     agent_id: str,
@@ -547,10 +574,12 @@ attribute_cols_base = [
     ]
 
 
-@router.post("/{agent_id}/filter", response_model=List[Dict[str, Any]])
+@router.post("/{agent_id}/filter", response_model=Dict[str, Any])
 def filter_agent_merchants(
     agent_id: str,
     filter_structure: Dict[str, Any] = Body(...),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
     year: int = None,
     month: int = None,
     week: int = None,
@@ -584,9 +613,85 @@ def filter_agent_merchants(
     merchant_df = add_computed_attributes(df, 'merchant_id')
     
     attribute_cols = ["merchant_id"] + attribute_cols_base
-        
+
     # Step 3: Apply filters to find merchants matching criteria
-    return apply_structured_filter(merchant_df, filter_structure, 'merchant_id', attribute_cols)
+    filtered_merchants = apply_structured_filter(merchant_df, filter_structure, 'merchant_id', attribute_cols)
+
+    # Step 4: Apply pagination
+    total_count = len(filtered_merchants)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_merchants = filtered_merchants[start_idx:end_idx]
+
+    return {
+        "data": paginated_merchants,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": ceil(total_count / page_size)
+        }
+    }
+
+
+@router.post("/{agent_id}/filter-customers", response_model=Dict[str, Any])
+def filter_agent_customers(
+    agent_id: str,
+    filter_structure: Dict[str, Any] = Body(...),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    year: int = None,
+    month: int = None,
+    week: int = None,
+    day: int = Query(None, ge=1, le=31),
+    range_days: int = Query(None, ge=1),
+    start_date: str = None,
+    end_date: str = None,
+    df=Depends(get_df)
+):
+    """
+    Filter customers associated with a specific agent based on complex filter criteria.
+
+    The filter_structure should follow the format:
+    {
+        "and": [
+            {"column": "total_transactions", "operator": "greater_than", "value": 5},
+            {"column": "avg_transaction_amount", "operator": "greater_than", "value": 100}
+        ]
+    }
+
+    Supported operators: equals, greater_than, less_than, between, in
+    """
+
+    # Step 1: Get all transactions for this agent
+    df, _ = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
+
+    # Step 2: Add computed attributes for customers (aggregating by customer_id)
+    customer_df = add_computed_attributes(df, 'customer_id')
+
+    attribute_cols = ["customer_id"] + attribute_cols_base
+
+    # Step 3: Apply filters to find customers matching criteria
+    filtered_customers = apply_structured_filter(customer_df, filter_structure, 'customer_id', attribute_cols)
+
+    # Step 4: Apply pagination
+    total_count = len(filtered_customers)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_customers = filtered_customers[start_idx:end_idx]
+
+    return {
+        "data": paginated_customers,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": ceil(total_count / page_size)
+        }
+    }
 
 
 @router.post("/{agent_id}/nl-filter", response_model=List[Dict[str, Any]])
@@ -604,7 +709,7 @@ async def nl_filter_agent_data(
 ):
     """
     Filter data for a specific agent based on natural language query.
-    
+
     Example queries:
     - "Show me transactions with more than $100"
     - "Find customers who made purchases last week"
@@ -645,5 +750,109 @@ async def nl_filter_agent_data(
     
     if not intent_result["filter_intent"]:
         raise HTTPException(status_code=400, detail="Could not determine filtering criteria from query")
-    
+
     return apply_nl_filter(df, query, group_by_column, attribute_cols)
+
+
+@router.post("/{agent_id}/nl-filter-customers", response_model=Dict[str, Any])
+async def nl_filter_agent_customers(
+    agent_id: str,
+    query: str = Body(..., embed=True),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    year: int = None,
+    month: int = None,
+    week: int = None,
+    day: int = Query(None, ge=1, le=31),
+    range_days: int = Query(None, ge=1),
+    start_date: str = None,
+    end_date: str = None,
+    df=Depends(get_df)
+):
+    """
+    Filter customers for a specific agent based on natural language query.
+
+    Example queries:
+    - "Find customers with more than 10 transactions"
+    - "Show customers who spend more than $500 on average"
+    - "List customers with total spending over $1000"
+    """
+    df, _ = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
+
+    # Add computed attributes for customers
+    df = add_computed_attributes(df, 'customer_id')
+    attribute_cols = ['customer_id'] + attribute_cols_base
+
+    # Apply natural language filter
+    filtered_customers = apply_nl_filter(df, query, 'customer_id', attribute_cols)
+
+    # Apply pagination
+    total_count = len(filtered_customers)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_customers = filtered_customers[start_idx:end_idx]
+
+    return {
+        "data": paginated_customers,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": ceil(total_count / page_size)
+        }
+    }
+
+
+@router.post("/{agent_id}/nl-filter-merchants", response_model=Dict[str, Any])
+async def nl_filter_agent_merchants(
+    agent_id: str,
+    query: str = Body(..., embed=True),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    year: int = None,
+    month: int = None,
+    week: int = None,
+    day: int = Query(None, ge=1, le=31),
+    range_days: int = Query(None, ge=1),
+    start_date: str = None,
+    end_date: str = None,
+    df=Depends(get_df)
+):
+    """
+    Filter merchants for a specific agent based on natural language query.
+
+    Example queries:
+    - "Find merchants with more than 50 transactions this month"
+    - "Show merchants with average transaction value over $200"
+    - "List merchants serving more than 20 unique customers"
+    """
+    df, _ = filter_entity_data(
+        df, "agent_id", agent_id,
+        year, month, week, day, range_days, start_date, end_date
+    )
+
+    # Add computed attributes for merchants
+    df = add_computed_attributes(df, 'merchant_id')
+    attribute_cols = ['merchant_id'] + attribute_cols_base
+
+    # Apply natural language filter
+    filtered_merchants = apply_nl_filter(df, query, 'merchant_id', attribute_cols)
+
+    # Apply pagination
+    total_count = len(filtered_merchants)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_merchants = filtered_merchants[start_idx:end_idx]
+
+    return {
+        "data": paginated_merchants,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": ceil(total_count / page_size)
+        }
+    }
